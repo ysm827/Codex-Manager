@@ -1790,6 +1790,78 @@ fn responses_compact_uses_codex_compat_rewrite() {
         .is_some());
 }
 
+#[test]
+fn responses_compact_keeps_only_codex_compact_body_fields() {
+    let _guard = crate::test_env_guard();
+    let body = json!({
+        "model": "gpt-5.3-codex",
+        "instructions": "compact instructions",
+        "input": "compact me",
+        "tools": [{ "type": "function", "name": "ping", "parameters": { "type": "object", "properties": {} } }],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "reasoning": { "effort": "high" },
+        "text": { "verbosity": "low" },
+        "stream": false,
+        "store": true,
+        "include": ["reasoning.encrypted_content"],
+        "prompt_cache_key": "pc_compact",
+        "client_metadata": {
+            "source": "snapshot"
+        },
+        "service_tier": "priority",
+        "metadata": { "client": "third-party" },
+        "max_output_tokens": 1024,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "truncation": "auto",
+        "user": "third-party-user",
+        "previous_response_id": "resp_previous",
+        "unknown_field": true
+    });
+    let out = apply_codex_compat_request_overrides(
+        "/v1/responses/compact",
+        serde_json::to_vec(&body).expect("serialize request body"),
+        None,
+        None,
+        Some("https://chatgpt.com/backend-api/codex"),
+    );
+    let value: serde_json::Value = serde_json::from_slice(&out).expect("parse output body");
+    let object = value.as_object().expect("rewritten compact body object");
+    let keys = object
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let expected = [
+        "input",
+        "instructions",
+        "model",
+        "parallel_tool_calls",
+        "reasoning",
+        "text",
+        "tools",
+    ]
+    .into_iter()
+    .collect::<std::collections::BTreeSet<_>>();
+
+    assert_eq!(keys, expected);
+    assert!(object.get("tool_choice").is_none());
+    assert!(object.get("stream").is_none());
+    assert!(object.get("store").is_none());
+    assert!(object.get("include").is_none());
+    assert!(object.get("prompt_cache_key").is_none());
+    assert!(object.get("client_metadata").is_none());
+    assert!(object.get("service_tier").is_none());
+    assert!(object.get("metadata").is_none());
+    assert!(object.get("max_output_tokens").is_none());
+    assert!(object.get("temperature").is_none());
+    assert!(object.get("top_p").is_none());
+    assert!(object.get("truncation").is_none());
+    assert!(object.get("user").is_none());
+    assert!(object.get("previous_response_id").is_none());
+    assert!(object.get("unknown_field").is_none());
+}
+
 /// 函数 `responses_compact_defaults_parallel_tool_calls_to_false_for_codex_backend`
 ///
 /// 作者: gaohongshun

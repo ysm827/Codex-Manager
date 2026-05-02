@@ -598,9 +598,17 @@ fn send_upstream_request_with_compression_override(
         strip_session_affinity,
     );
     let mut upstream_headers = if is_compact_request {
+        let installation_id = if gemini_codex_compat {
+            None
+        } else {
+            super::super::header_profile::resolve_codex_installation_id(
+                incoming_headers.codex_installation_id(),
+            )
+        };
         let header_input = super::super::header_profile::CodexCompactUpstreamHeaderInput {
             auth_token,
             chatgpt_account_id: resolve_chatgpt_account_header(account, target_url),
+            installation_id: installation_id.as_deref(),
             incoming_user_agent: incoming_headers.user_agent(),
             incoming_originator: incoming_headers.originator(),
             preserve_client_identity: should_preserve_client_identity(request_ctx.protocol_type),

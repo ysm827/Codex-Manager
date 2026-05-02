@@ -265,6 +265,7 @@ pub(super) fn try_openai_fallback(
         let header_input = super::upstream::header_profile::CodexCompactUpstreamHeaderInput {
             auth_token: bearer.as_str(),
             chatgpt_account_id: resolve_chatgpt_account_header(account, upstream_base),
+            installation_id: None,
             incoming_user_agent: incoming_headers.user_agent(),
             incoming_originator: incoming_headers.originator(),
             preserve_client_identity: false,

@@ -274,6 +274,7 @@ fn codex_compact_header_profile_matches_remote_compact_shape() {
     let headers = build_codex_compact_upstream_headers(CodexCompactUpstreamHeaderInput {
         auth_token: "token-compact",
         chatgpt_account_id: Some("workspace-compact"),
+        installation_id: Some("install-compact"),
         incoming_user_agent: None,
         incoming_originator: None,
         preserve_client_identity: false,
@@ -294,6 +295,10 @@ fn codex_compact_header_profile_matches_remote_compact_shape() {
     assert_eq!(
         find_header(&headers, "ChatGPT-Account-ID").as_deref(),
         Some("workspace-compact")
+    );
+    assert_eq!(
+        find_header(&headers, "x-codex-installation-id").as_deref(),
+        Some("install-compact")
     );
     assert_eq!(
         find_header(&headers, "Content-Type").as_deref(),
@@ -351,6 +356,7 @@ fn codex_compact_header_profile_omits_subagent_without_explicit_source() {
     let headers = build_codex_compact_upstream_headers(CodexCompactUpstreamHeaderInput {
         auth_token: "token-compact-default",
         chatgpt_account_id: None,
+        installation_id: None,
         incoming_user_agent: None,
         incoming_originator: None,
         preserve_client_identity: false,
@@ -365,6 +371,7 @@ fn codex_compact_header_profile_omits_subagent_without_explicit_source() {
     });
 
     assert!(find_header(&headers, "x-openai-subagent").is_none());
+    assert!(find_header(&headers, "x-codex-installation-id").is_none());
 }
 
 /// 函数 `codex_compact_header_profile_omits_session_without_thread_anchor`
@@ -384,6 +391,7 @@ fn codex_compact_header_profile_omits_session_without_thread_anchor() {
     let headers = build_codex_compact_upstream_headers(CodexCompactUpstreamHeaderInput {
         auth_token: "token-compact-no-session",
         chatgpt_account_id: None,
+        installation_id: None,
         incoming_user_agent: None,
         incoming_originator: None,
         preserve_client_identity: false,

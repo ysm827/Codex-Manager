@@ -1,3 +1,4 @@
+const X_CODEX_INSTALLATION_ID_HEADER_NAME: &str = "x-codex-installation-id";
 const X_CODEX_WINDOW_ID_HEADER_NAME: &str = "x-codex-window-id";
 const X_CODEX_PARENT_THREAD_ID_HEADER_NAME: &str = "x-codex-parent-thread-id";
 const X_RESPONSESAPI_INCLUDE_TIMING_METRICS_HEADER_NAME: &str =
@@ -64,6 +65,7 @@ pub(crate) struct CodexUpstreamHeaderInput<'a> {
 pub(crate) struct CodexCompactUpstreamHeaderInput<'a> {
     pub(crate) auth_token: &'a str,
     pub(crate) chatgpt_account_id: Option<&'a str>,
+    pub(crate) installation_id: Option<&'a str>,
     pub(crate) incoming_user_agent: Option<&'a str>,
     pub(crate) incoming_originator: Option<&'a str>,
     pub(crate) preserve_client_identity: bool,
@@ -75,6 +77,20 @@ pub(crate) struct CodexCompactUpstreamHeaderInput<'a> {
     pub(crate) fallback_session_id: Option<&'a str>,
     pub(crate) strip_session_affinity: bool,
     pub(crate) has_body: bool,
+}
+
+pub(crate) fn resolve_codex_installation_id(
+    incoming_installation_id: Option<&str>,
+) -> Option<String> {
+    normalize_non_empty(incoming_installation_id)
+        .map(str::to_string)
+        .or_else(|| {
+            crate::process_env::resolve_installation_id()
+                .inspect_err(|err| {
+                    log::warn!("event=gateway_installation_id_resolve_failed error={}", err);
+                })
+                .ok()
+        })
 }
 
 /// 函数 `build_codex_upstream_headers`
@@ -219,7 +235,7 @@ pub(crate) fn build_codex_compact_upstream_headers(
         resolve_user_agent_header(input.incoming_user_agent, input.preserve_client_identity);
     let originator =
         resolve_originator_header(input.incoming_originator, input.preserve_client_identity);
-    let mut headers = Vec::with_capacity(12);
+    let mut headers = Vec::with_capacity(13);
     headers.push((
         "Authorization".to_string(),
         format!("Bearer {}", input.auth_token),
@@ -230,6 +246,16 @@ pub(crate) fn build_codex_compact_upstream_headers(
         .filter(|value| !value.is_empty())
     {
         headers.push(("ChatGPT-Account-ID".to_string(), account_id.to_string()));
+    }
+    if let Some(installation_id) = input
+        .installation_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        headers.push((
+            X_CODEX_INSTALLATION_ID_HEADER_NAME.to_string(),
+            installation_id.to_string(),
+        ));
     }
     if input.has_body {
         headers.push(("Content-Type".to_string(), "application/json".to_string()));
@@ -387,11 +413,60 @@ fn resolve_client_request_id(incoming_client_request_id: Option<&str>) -> Option
 
 #[cfg(test)]
 mod tests {
-    use super::{build_codex_compact_upstream_headers, build_codex_upstream_headers};
+    use super::{
+        build_codex_compact_upstream_headers, build_codex_upstream_headers,
+        resolve_codex_installation_id,
+    };
     use crate::gateway::{
         set_codex_user_agent_version, set_originator, CodexCompactUpstreamHeaderInput,
         CodexUpstreamHeaderInput,
     };
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    const CODEXMANAGER_DB_PATH_ENV: &str = "CODEXMANAGER_DB_PATH";
+
+    struct RuntimeEnvGuard {
+        name: &'static str,
+        previous_value: Option<String>,
+    }
+
+    impl RuntimeEnvGuard {
+        fn set(name: &'static str, value: &str) -> Self {
+            let previous_value = std::env::var(name).ok();
+            std::env::set_var(name, value);
+            crate::gateway::reload_runtime_config_from_env();
+            Self {
+                name,
+                previous_value,
+            }
+        }
+    }
+
+    impl Drop for RuntimeEnvGuard {
+        fn drop(&mut self) {
+            match self.previous_value.as_deref() {
+                Some(value) => std::env::set_var(self.name, value),
+                None => std::env::remove_var(self.name),
+            }
+            crate::gateway::reload_runtime_config_from_env();
+        }
+    }
+
+    fn isolated_db_path(label: &str) -> String {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time after unix epoch")
+            .as_nanos();
+        std::env::temp_dir()
+            .join(format!(
+                "codexmanager-codex-headers-{}-{}-{}.db",
+                label,
+                std::process::id(),
+                nanos
+            ))
+            .to_string_lossy()
+            .into_owned()
+    }
 
     /// 函数 `header_value`
     ///
@@ -410,6 +485,32 @@ mod tests {
             .iter()
             .find(|(header_name, _)| header_name.eq_ignore_ascii_case(name))
             .map(|(_, value)| value.as_str())
+    }
+
+    #[test]
+    fn resolve_codex_installation_id_prefers_incoming_header() {
+        let _guard = crate::test_env_guard();
+
+        assert_eq!(
+            resolve_codex_installation_id(Some(" install-from-client ")).as_deref(),
+            Some("install-from-client")
+        );
+    }
+
+    #[test]
+    fn resolve_codex_installation_id_uses_persisted_fallback_when_incoming_missing() {
+        let _guard = crate::test_env_guard();
+        let _db_guard = RuntimeEnvGuard::set(
+            CODEXMANAGER_DB_PATH_ENV,
+            isolated_db_path("compact-installation-id").as_str(),
+        );
+
+        let first = resolve_codex_installation_id(None).expect("first installation id");
+        let second = resolve_codex_installation_id(None).expect("second installation id");
+
+        assert_eq!(first, second);
+        assert_eq!(first.len(), 36);
+        assert_eq!(first.as_bytes().get(14).copied(), Some(b'4'));
     }
 
     /// 函数 `build_codex_upstream_headers_keeps_final_affinity_shape`
@@ -598,6 +699,7 @@ mod tests {
         let headers = build_codex_compact_upstream_headers(CodexCompactUpstreamHeaderInput {
             auth_token: "token-789",
             chatgpt_account_id: Some("account-compact"),
+            installation_id: Some("install-compact-internal"),
             incoming_user_agent: None,
             incoming_originator: None,
             preserve_client_identity: false,
@@ -615,6 +717,10 @@ mod tests {
         assert_eq!(
             header_value(&headers, "ChatGPT-Account-ID"),
             Some("account-compact")
+        );
+        assert_eq!(
+            header_value(&headers, "x-codex-installation-id"),
+            Some("install-compact-internal")
         );
         assert_eq!(header_value(&headers, "x-client-request-id"), None);
         assert_eq!(
