@@ -8,6 +8,8 @@ use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const STRICT_REQUEST_PARAM_ALLOWLIST_ENV: &str = "CODEXMANAGER_STRICT_REQUEST_PARAM_ALLOWLIST";
+const CODEX_IMAGE_GENERATION_AUTO_INJECT_TOOL_ENV: &str =
+    "CODEXMANAGER_CODEX_IMAGE_GENERATION_AUTO_INJECT_TOOL";
 const CODEXMANAGER_DB_PATH_ENV: &str = "CODEXMANAGER_DB_PATH";
 
 struct RuntimeEnvGuard {
@@ -536,6 +538,101 @@ fn responses_default_path_preserves_image_generation_tool() {
             .and_then(serde_json::Value::as_str),
         Some("image_generation")
     );
+}
+
+#[test]
+fn responses_default_path_auto_injects_image_generation_tool_for_codex_backend() {
+    let _guard = crate::test_env_guard();
+    let _inject_guard = RuntimeEnvGuard::set(CODEX_IMAGE_GENERATION_AUTO_INJECT_TOOL_ENV, "1");
+    let body = json!({
+        "model": "gpt-5.4",
+        "input": "帮我生成一个现场作业中台 logo",
+        "stream": true
+    });
+    let out = apply_request_overrides(
+        "/v1/responses",
+        serde_json::to_vec(&body).expect("serialize request body"),
+        None,
+        None,
+        Some("https://chatgpt.com/backend-api/codex"),
+    );
+    let value: serde_json::Value = serde_json::from_slice(&out).expect("parse output body");
+
+    let tools = value
+        .get("tools")
+        .and_then(serde_json::Value::as_array)
+        .expect("tools array");
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0]["type"], "image_generation");
+    assert_eq!(tools[0]["output_format"], "png");
+    assert!(tools[0].get("model").is_none());
+}
+
+#[test]
+fn responses_default_path_auto_inject_appends_without_duplicating_image_generation_tool() {
+    let _guard = crate::test_env_guard();
+    let _inject_guard = RuntimeEnvGuard::set(CODEX_IMAGE_GENERATION_AUTO_INJECT_TOOL_ENV, "1");
+    let body = json!({
+        "model": "gpt-5.4",
+        "input": "hello",
+        "tools": [{
+            "type": "web_search"
+        }]
+    });
+    let out = apply_request_overrides(
+        "/v1/responses",
+        serde_json::to_vec(&body).expect("serialize request body"),
+        None,
+        None,
+        Some("https://chatgpt.com/backend-api/codex"),
+    );
+    let value: serde_json::Value = serde_json::from_slice(&out).expect("parse output body");
+
+    let tools = value
+        .get("tools")
+        .and_then(serde_json::Value::as_array)
+        .expect("tools array");
+    assert_eq!(tools.len(), 2);
+    assert_eq!(tools[0]["type"], "web_search");
+    assert_eq!(tools[1]["type"], "image_generation");
+    assert_eq!(tools[1]["output_format"], "png");
+}
+
+#[test]
+fn responses_default_path_skips_auto_image_generation_tool_when_disabled_or_spark_model() {
+    let _guard = crate::test_env_guard();
+    {
+        let _inject_guard = RuntimeEnvGuard::set(CODEX_IMAGE_GENERATION_AUTO_INJECT_TOOL_ENV, "0");
+        let body = json!({
+            "model": "gpt-5.4",
+            "input": "hello"
+        });
+        let out = apply_request_overrides(
+            "/v1/responses",
+            serde_json::to_vec(&body).expect("serialize request body"),
+            None,
+            None,
+            Some("https://chatgpt.com/backend-api/codex"),
+        );
+        let value: serde_json::Value = serde_json::from_slice(&out).expect("parse output body");
+        assert!(value.get("tools").is_none());
+    }
+    {
+        let _inject_guard = RuntimeEnvGuard::set(CODEX_IMAGE_GENERATION_AUTO_INJECT_TOOL_ENV, "1");
+        let body = json!({
+            "model": "gpt-5.4-spark",
+            "input": "hello"
+        });
+        let out = apply_request_overrides(
+            "/v1/responses",
+            serde_json::to_vec(&body).expect("serialize request body"),
+            None,
+            None,
+            Some("https://chatgpt.com/backend-api/codex"),
+        );
+        let value: serde_json::Value = serde_json::from_slice(&out).expect("parse output body");
+        assert!(value.get("tools").is_none());
+    }
 }
 
 #[test]
@@ -1121,7 +1218,7 @@ fn responses_dynamic_tools_are_mapped_to_tools_for_codex_backend() {
         .get("tools")
         .and_then(serde_json::Value::as_array)
         .expect("tools array");
-    assert_eq!(tools.len(), 2);
+    assert_eq!(tools.len(), 3);
     assert!(value.get("dynamicTools").is_none());
     assert_eq!(
         tools[1].get("name").and_then(serde_json::Value::as_str),
@@ -1141,6 +1238,16 @@ fn responses_dynamic_tools_are_mapped_to_tools_for_codex_backend() {
             .and_then(|city| city.get("type"))
             .and_then(serde_json::Value::as_str),
         Some("string")
+    );
+    assert_eq!(
+        tools[2].get("type").and_then(serde_json::Value::as_str),
+        Some("image_generation")
+    );
+    assert_eq!(
+        tools[2]
+            .get("output_format")
+            .and_then(serde_json::Value::as_str),
+        Some("png")
     );
 }
 

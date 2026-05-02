@@ -163,19 +163,18 @@ fn warmup_single_account(
                         .unwrap_or_else(|_| codexmanager_core::auth::DEFAULT_ISSUER.to_string());
                     let client_id = std::env::var("CODEXMANAGER_CLIENT_ID")
                         .unwrap_or_else(|_| codexmanager_core::auth::DEFAULT_CLIENT_ID.to_string());
-                    outcome =
-                        refresh_and_persist_access_token(
-                            storage,
-                            &mut token,
-                            &issuer,
-                            &client_id,
-                            DEFAULT_TOKEN_REFRESH_AHEAD_SECS,
+                    outcome = refresh_and_persist_access_token(
+                        storage,
+                        &mut token,
+                        &issuer,
+                        &client_id,
+                        DEFAULT_TOKEN_REFRESH_AHEAD_SECS,
+                    )
+                    .and_then(|_| {
+                        send_warmup_request_with_fallback(
+                            client, &account, &token, model_slug, message,
                         )
-                            .and_then(|_| {
-                                send_warmup_request_with_fallback(
-                                    client, &account, &token, model_slug, message,
-                                )
-                            });
+                    });
                 }
             }
 

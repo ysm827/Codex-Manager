@@ -23,7 +23,7 @@ CodexManager is a local desktop + service-process account pool manager and gatew
 - Aggregate API: create/edit/test third-party relay upstreams with supplier naming and priority ordering.
 - Plugin center: built-in, private, and custom source modes with task/log views and Rhai integration.
 - Local service + gateway: custom bind/listen settings, upstream proxy, total request timeout, stream idle timeout, SSE keepalive, and a unified compatible endpoint.
-- Image generation: forwards the official Codex `image_generation` tool and exposes compatible `/v1/images/generations` and `/v1/images/edits` endpoints with `gpt-image-2` as the default image tool model.
+- Image generation: automatically injects the official Codex `image_generation` tool for `/v1/responses` by default, forwards explicit tools unchanged, and exposes compatible `/v1/images/generations` and `/v1/images/edits` endpoints with `gpt-image-2` as the default image tool model.
 
 ## Quick Start
 

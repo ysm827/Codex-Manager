@@ -492,15 +492,13 @@ fn refresh_usage_for_token(
             }
             // 中文注释：token 刷新与持久化独立封装，避免轮询流程继续膨胀；
             // 不下沉会让后续 async 迁移时刷新链路与业务编排强耦合，回归范围扩大。
-            if let Err(refresh_err) =
-                refresh_and_persist_access_token(
-                    storage,
-                    &mut current,
-                    &issuer,
-                    &client_id,
-                    TOKEN_REFRESH_AHEAD_SECS,
-                )
-            {
+            if let Err(refresh_err) = refresh_and_persist_access_token(
+                storage,
+                &mut current,
+                &issuer,
+                &client_id,
+                TOKEN_REFRESH_AHEAD_SECS,
+            ) {
                 mark_usage_unreachable_if_needed(storage, &current.account_id, &refresh_err);
                 return Err(refresh_err);
             }

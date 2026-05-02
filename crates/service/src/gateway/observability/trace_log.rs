@@ -8,6 +8,8 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use serde_json::Value;
+
 const DEFAULT_TRACE_QUEUE_CAPACITY: usize = 0;
 const TRACE_FLUSH_WAIT_TIMEOUT_MS: u64 = 200;
 const ENV_TRACE_QUEUE_CAPACITY: &str = "CODEXMANAGER_TRACE_QUEUE_CAPACITY";
@@ -287,7 +289,9 @@ fn trace_file_path_from_env() -> PathBuf {
 /// # 返回
 /// 返回函数执行结果
 fn sanitize_text(value: &str) -> String {
-    redact_base64_images_for_log(value).replace(['\r', '\n'], " ")
+    let redacted = redact_base64_images_for_log(value);
+    let redacted = redact_image_generation_payloads_for_log(redacted.as_str());
+    redacted.replace(['\r', '\n'], " ")
 }
 
 fn redact_base64_images_for_log(value: &str) -> String {
@@ -315,6 +319,111 @@ fn redact_base64_images_for_log(value: &str) -> String {
             .unwrap_or(data.len());
         rest = &data[data_end..];
     }
+    output
+}
+
+fn redact_image_generation_payloads_for_log(value: &str) -> String {
+    if !value.contains("image_generation_call") {
+        return value.to_string();
+    }
+
+    if let Ok(mut parsed) = serde_json::from_str::<Value>(value) {
+        redact_image_generation_value(&mut parsed);
+        return serde_json::to_string(&parsed).unwrap_or_else(|_| value.to_string());
+    }
+
+    let redacted = redact_json_string_field_for_log(value, "result");
+    redact_json_string_field_for_log(redacted.as_str(), "partial_image_b64")
+}
+
+fn redact_image_generation_value(value: &mut Value) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                redact_image_generation_value(item);
+            }
+        }
+        Value::Object(obj) => {
+            let event_type = obj.get("type").and_then(Value::as_str);
+            let is_image_call = event_type == Some("image_generation_call");
+            let is_partial_image =
+                event_type == Some("response.image_generation_call.partial_image");
+
+            if is_image_call {
+                redact_json_object_string_field(obj, "result");
+            }
+            if is_partial_image {
+                redact_json_object_string_field(obj, "partial_image_b64");
+            }
+            for child in obj.values_mut() {
+                redact_image_generation_value(child);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn redact_json_object_string_field(obj: &mut serde_json::Map<String, Value>, field: &str) {
+    if obj.get(field).and_then(Value::as_str).is_some() {
+        obj.insert(
+            field.to_string(),
+            Value::String("<base64 image omitted>".to_string()),
+        );
+    }
+}
+
+fn redact_json_string_field_for_log(value: &str, field: &str) -> String {
+    let key = format!("\"{field}\"");
+    let bytes = value.as_bytes();
+    let mut output = String::with_capacity(value.len());
+    let mut copy_start = 0usize;
+    let mut search_start = 0usize;
+
+    while let Some(relative_key_start) = value[search_start..].find(key.as_str()) {
+        let key_start = search_start + relative_key_start;
+        let mut cursor = key_start + key.len();
+        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if cursor >= bytes.len() || bytes[cursor] != b':' {
+            search_start = key_start + key.len();
+            continue;
+        }
+        cursor += 1;
+        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if cursor >= bytes.len() || bytes[cursor] != b'"' {
+            search_start = cursor;
+            continue;
+        }
+
+        let value_quote = cursor;
+        let mut value_end = value_quote + 1;
+        let mut escaped = false;
+        while value_end < bytes.len() {
+            let byte = bytes[value_end];
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                break;
+            }
+            value_end += 1;
+        }
+        if value_end >= bytes.len() {
+            break;
+        }
+
+        output.push_str(&value[copy_start..=value_quote]);
+        output.push_str("<base64 image omitted>");
+        output.push('"');
+        copy_start = value_end + 1;
+        search_start = value_end + 1;
+    }
+
+    output.push_str(&value[copy_start..]);
     output
 }
 
@@ -1348,5 +1457,18 @@ mod tests {
         assert!(sanitized.contains("data:image/png;base64,<base64 image omitted>"));
         assert!(!sanitized.contains("aGVsbG8="));
         assert!(sanitized.contains("data:text/plain;base64,dmFsdWU="));
+    }
+
+    #[test]
+    fn sanitize_text_redacts_image_generation_result_payloads() {
+        let sanitized = sanitize_text(
+            "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"image_generation_call\",\"result\":\"QUJDREVGRw==\"}}\n\
+             data: {\"type\":\"response.image_generation_call.partial_image\",\"partial_image_b64\":\"cGFydA==\"}",
+        );
+
+        assert!(sanitized.contains("\"result\":\"<base64 image omitted>\""));
+        assert!(sanitized.contains("\"partial_image_b64\":\"<base64 image omitted>\""));
+        assert!(!sanitized.contains("QUJDREVGRw=="));
+        assert!(!sanitized.contains("cGFydA=="));
     }
 }

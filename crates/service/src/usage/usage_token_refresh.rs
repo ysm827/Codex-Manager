@@ -47,10 +47,10 @@ pub(crate) fn refresh_and_persist_access_token(
 }
 
 fn next_refresh_at_from_token(token: &Token, ahead_secs: i64) -> Option<i64> {
-    let access_refresh_at = extract_token_exp(&token.access_token)
-        .map(|exp| exp.saturating_sub(ahead_secs));
-    let refresh_refresh_at = extract_token_exp(&token.refresh_token)
-        .map(|exp| exp.saturating_sub(ahead_secs));
+    let access_refresh_at =
+        extract_token_exp(&token.access_token).map(|exp| exp.saturating_sub(ahead_secs));
+    let refresh_refresh_at =
+        extract_token_exp(&token.refresh_token).map(|exp| exp.saturating_sub(ahead_secs));
 
     match (access_refresh_at, refresh_refresh_at) {
         (Some(access_at), Some(refresh_at)) => Some(access_at.min(refresh_at)),

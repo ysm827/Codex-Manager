@@ -6,7 +6,7 @@ It follows Keep a Changelog with a lightweight adaptation for this repository.
 ## [Unreleased]
 
 ### Added
-- Added Codex image-generation compatibility: the official `image_generation` tool is forwarded, and compatible `/v1/images/generations` plus `/v1/images/edits` endpoints are available with `gpt-image-2` as the default image tool model.
+- Added Codex image-generation compatibility: `/v1/responses` now auto-injects the official `image_generation` tool by default to match Codex behavior, explicit tools are forwarded unchanged, and compatible `/v1/images/generations` plus `/v1/images/edits` endpoints are available with `gpt-image-2` as the default image tool model.
 - Added an `auth.json` step to the Codex CLI first-time setup guide, clarifying how the platform key, `auth.json`, and `config.toml` fit together.
 
 ### Fixed
