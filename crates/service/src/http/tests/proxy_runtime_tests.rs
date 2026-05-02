@@ -1,4 +1,7 @@
-use super::{build_backend_base_url, build_local_backend_client, proxy_handler, ProxyState};
+use super::{
+    build_backend_base_url, build_local_backend_client, front_proxy_max_blocking_threads,
+    proxy_handler, ProxyState,
+};
 use axum::body::{to_bytes, Body};
 use axum::extract::State;
 use axum::http::{Request as HttpRequest, StatusCode};
@@ -36,6 +39,12 @@ impl EnvGuard {
     fn set(key: &'static str, value: &str) -> Self {
         let original = std::env::var_os(key);
         std::env::set_var(key, value);
+        Self { key, original }
+    }
+
+    fn clear(key: &'static str) -> Self {
+        let original = std::env::var_os(key);
+        std::env::remove_var(key);
         Self { key, original }
     }
 }
@@ -94,6 +103,24 @@ fn backend_base_url_uses_http_scheme() {
 #[test]
 fn local_backend_client_builds_without_system_proxy() {
     build_local_backend_client().expect("local backend client");
+}
+
+#[test]
+fn front_proxy_blocking_threads_follow_storage_pool_default() {
+    let _guard = crate::test_env_guard();
+    let _front_guard = EnvGuard::clear("CODEXMANAGER_FRONT_PROXY_MAX_BLOCKING_THREADS");
+    let _storage_guard = EnvGuard::set("CODEXMANAGER_STORAGE_MAX_CONNECTIONS", "7");
+
+    assert_eq!(front_proxy_max_blocking_threads(), 7);
+}
+
+#[test]
+fn front_proxy_blocking_threads_allow_explicit_override() {
+    let _guard = crate::test_env_guard();
+    let _storage_guard = EnvGuard::set("CODEXMANAGER_STORAGE_MAX_CONNECTIONS", "7");
+    let _front_guard = EnvGuard::set("CODEXMANAGER_FRONT_PROXY_MAX_BLOCKING_THREADS", "5");
+
+    assert_eq!(front_proxy_max_blocking_threads(), 5);
 }
 
 /// 函数 `request_without_content_length_over_limit_returns_413`
