@@ -24,9 +24,7 @@ use crate::usage_scheduler::{
     MIN_USAGE_POLL_INTERVAL_SECS,
 };
 use crate::usage_snapshot_store::store_usage_snapshot;
-use crate::usage_token_refresh::{
-    refresh_and_persist_access_token, DEFAULT_TOKEN_REFRESH_AHEAD_SECS,
-};
+use crate::usage_token_refresh::{refresh_and_persist_access_token, token_refresh_ahead_secs};
 
 mod batch;
 mod errors;
@@ -85,7 +83,6 @@ const GATEWAY_KEEPALIVE_FAILURE_BACKOFF_MAX_ENV: &str =
 const DEFAULT_TOKEN_REFRESH_POLL_INTERVAL_SECS: u64 = 60;
 const MIN_TOKEN_REFRESH_POLL_INTERVAL_SECS: u64 = 10;
 const TOKEN_REFRESH_FAILURE_BACKOFF_MAX_SECS: u64 = 300;
-const TOKEN_REFRESH_AHEAD_SECS: i64 = DEFAULT_TOKEN_REFRESH_AHEAD_SECS;
 const TOKEN_REFRESH_LOOKAHEAD_BUFFER_SECS: u64 = 60;
 const TOKEN_REFRESH_FALLBACK_AGE_SECS: i64 = 2700;
 const DEFAULT_TOKEN_REFRESH_BATCH_LIMIT: usize = 2048;
@@ -291,7 +288,8 @@ pub(crate) fn refresh_tokens_before_expiry_for_all_accounts() -> Result<(), Stri
         now,
         TOKEN_REFRESH_POLL_INTERVAL_SECS_ATOMIC.load(std::sync::atomic::Ordering::Relaxed),
     );
-    let access_exp_cutoff = token_refresh_access_exp_cutoff(due_cutoff, TOKEN_REFRESH_AHEAD_SECS);
+    let refresh_ahead_secs = token_refresh_ahead_secs();
+    let access_exp_cutoff = token_refresh_access_exp_cutoff(due_cutoff, refresh_ahead_secs);
     let mut tokens = storage
         .list_tokens_due_for_refresh(due_cutoff, access_exp_cutoff, token_refresh_batch_limit())
         .map_err(|e| e.to_string())?;
@@ -317,7 +315,7 @@ pub(crate) fn refresh_tokens_before_expiry_for_all_accounts() -> Result<(), Stri
         let (exp_opt, scheduled_at) = token_refresh_schedule(
             token,
             now,
-            TOKEN_REFRESH_AHEAD_SECS,
+            refresh_ahead_secs,
             TOKEN_REFRESH_FALLBACK_AGE_SECS,
         );
         let _ =
@@ -497,7 +495,7 @@ fn refresh_usage_for_token(
                 &mut current,
                 &issuer,
                 &client_id,
-                TOKEN_REFRESH_AHEAD_SECS,
+                token_refresh_ahead_secs(),
             ) {
                 mark_usage_unreachable_if_needed(storage, &current.account_id, &refresh_err);
                 return Err(refresh_err);
@@ -799,7 +797,7 @@ fn run_token_refresh_task(
         token,
         issuer,
         client_id,
-        TOKEN_REFRESH_AHEAD_SECS,
+        token_refresh_ahead_secs(),
     ) {
         Ok(_) => true,
         Err(err) => {

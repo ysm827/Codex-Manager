@@ -1,5 +1,5 @@
 use base64::Engine;
-use codexmanager_core::auth::build_authorize_url;
+use codexmanager_core::auth::{build_authorize_url, extract_client_id_claim};
 
 fn jwt_with_json(payload_json: &str) -> String {
     let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(payload_json);
@@ -70,6 +70,23 @@ fn parse_id_token_claims_extracts_email_and_sub() {
     let claims = codexmanager_core::auth::parse_id_token_claims(token).expect("claims");
     assert_eq!(claims.sub, "user-1");
     assert_eq!(claims.email.as_deref(), Some("test@example.com"));
+}
+
+#[test]
+fn parse_id_token_claims_extracts_client_id() {
+    let token = jwt_with_json(
+        r#"{"sub":"user-1","client_id":"app_EMoamEEZ73f0CkXaXp7hrann","email":"test@example.com"}"#,
+    );
+    let claims = codexmanager_core::auth::parse_id_token_claims(&token).expect("claims");
+
+    assert_eq!(
+        claims.client_id.as_deref(),
+        Some("app_EMoamEEZ73f0CkXaXp7hrann")
+    );
+    assert_eq!(
+        extract_client_id_claim(&token).as_deref(),
+        Some("app_EMoamEEZ73f0CkXaXp7hrann")
+    );
 }
 
 /// 函数 `extract_token_exp_reads_exp_claim`

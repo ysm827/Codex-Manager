@@ -223,7 +223,8 @@ pub(super) fn resolve_openai_bearer_token(
         return Ok(cached);
     }
 
-    let client_id = super::runtime_config::token_exchange_client_id();
+    let fallback_client_id = super::runtime_config::token_exchange_client_id();
+    let client_id = crate::usage_token_refresh::token_refresh_client_id(token, &fallback_client_id);
     let issuer_env = super::runtime_config::token_exchange_default_issuer();
     let issuer = if account.issuer.trim().is_empty() {
         issuer_env
@@ -247,8 +248,15 @@ pub(super) fn resolve_openai_bearer_token(
                         let _ = storage.insert_token(token);
 
                         if !token.id_token.trim().is_empty() {
+                            let refreshed_client_id =
+                                crate::usage_token_refresh::token_refresh_client_id(
+                                    token, &client_id,
+                                );
                             if let Ok(exchanged) = exchange_and_persist_api_key_access_token(
-                                storage, token, &issuer, &client_id,
+                                storage,
+                                token,
+                                &issuer,
+                                &refreshed_client_id,
                             ) {
                                 return Ok(exchanged);
                             }

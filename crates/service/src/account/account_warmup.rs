@@ -10,9 +10,7 @@ use crate::account_status::mark_account_unavailable_for_auth_error;
 use crate::apikey_models::read_managed_model_catalog_from_storage;
 use crate::storage_helpers::open_storage;
 use crate::usage_account_meta::workspace_header_for_account;
-use crate::usage_token_refresh::{
-    refresh_and_persist_access_token, DEFAULT_TOKEN_REFRESH_AHEAD_SECS,
-};
+use crate::usage_token_refresh::{refresh_and_persist_access_token, token_refresh_ahead_secs};
 
 const DEFAULT_WARMUP_MESSAGE: &str = "hi";
 const FALLBACK_WARMUP_MESSAGE: &str = "你好";
@@ -168,7 +166,7 @@ fn warmup_single_account(
                         &mut token,
                         &issuer,
                         &client_id,
-                        DEFAULT_TOKEN_REFRESH_AHEAD_SECS,
+                        token_refresh_ahead_secs(),
                     )
                     .and_then(|_| {
                         send_warmup_request_with_fallback(

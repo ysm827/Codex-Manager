@@ -29,6 +29,7 @@ const ISOLATED_RUNTIME_ENV_KEYS: &[&str] = &[
     "CODEXMANAGER_GATEWAY_KEEPALIVE_INTERVAL_SECS",
     "CODEXMANAGER_TOKEN_REFRESH_POLLING_ENABLED",
     "CODEXMANAGER_TOKEN_REFRESH_POLL_INTERVAL_SECS",
+    "CODEXMANAGER_TOKEN_REFRESH_AHEAD_SECS",
     "CODEXMANAGER_USAGE_REFRESH_WORKERS",
     "CODEXMANAGER_HTTP_WORKER_FACTOR",
     "CODEXMANAGER_HTTP_WORKER_MIN",
@@ -1400,6 +1401,25 @@ fn app_settings_set_persists_env_overrides_and_exposes_catalog() {
                 .get("defaultValue")
                 .and_then(|value| value.as_str()),
             Some("1")
+        );
+        let token_refresh_ahead = catalog
+            .iter()
+            .find(|item| {
+                item.get("key").and_then(|value| value.as_str())
+                    == Some("CODEXMANAGER_TOKEN_REFRESH_AHEAD_SECS")
+            })
+            .expect("token refresh ahead catalog item");
+        assert_eq!(
+            token_refresh_ahead
+                .get("defaultValue")
+                .and_then(|value| value.as_str()),
+            Some("3600")
+        );
+        assert_eq!(
+            token_refresh_ahead
+                .get("applyMode")
+                .and_then(|value| value.as_str()),
+            Some("runtime")
         );
         assert!(snapshot
             .get("envOverrideReservedKeys")

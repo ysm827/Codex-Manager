@@ -1,5 +1,7 @@
 use codexmanager_core::auth::{DEFAULT_CLIENT_ID, DEFAULT_ISSUER, DEFAULT_ORIGINATOR};
 
+use crate::usage_token_refresh::ENV_TOKEN_REFRESH_AHEAD_SECS;
+
 use super::EnvOverrideCatalogItem;
 
 const ENV_OVERRIDE_SCOPE_SERVICE: &str = "service";
@@ -309,6 +311,13 @@ pub(crate) const ENV_OVERRIDE_CATALOG: &[EnvOverrideCatalogItem] = &[
         ENV_OVERRIDE_SCOPE_SERVICE,
         ENV_OVERRIDE_APPLY_MODE_RUNTIME,
         "0",
+    ),
+    EnvOverrideCatalogItem::new(
+        ENV_TOKEN_REFRESH_AHEAD_SECS,
+        "Token 刷新提前量（秒）",
+        ENV_OVERRIDE_SCOPE_SERVICE,
+        ENV_OVERRIDE_APPLY_MODE_RUNTIME,
+        "3600",
     ),
     EnvOverrideCatalogItem::new(
         "CODEXMANAGER_UPDATE_PRERELEASE",
