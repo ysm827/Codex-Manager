@@ -2,7 +2,7 @@ use super::*;
 use codexmanager_core::rpc::types::{ModelInfo, ModelsResponse};
 use serde_json::Value;
 
-/// 函数 `serialize_models_response_outputs_official_shape`
+/// 函数 `serialize_models_response_outputs_codex_and_api_shapes`
 ///
 /// 作者: gaohongshun
 ///
@@ -14,7 +14,7 @@ use serde_json::Value;
 /// # 返回
 /// 无
 #[test]
-fn serialize_models_response_outputs_official_shape() {
+fn serialize_models_response_outputs_codex_and_api_shapes() {
     let items = ModelsResponse {
         models: vec![
             ModelInfo {
@@ -40,6 +40,26 @@ fn serialize_models_response_outputs_official_shape() {
     };
     let output = serialize_models_response(&items);
     let value: Value = serde_json::from_str(&output).expect("valid json");
+    assert_eq!(value.get("object").and_then(Value::as_str), Some("list"));
+    let data = value
+        .get("data")
+        .and_then(Value::as_array)
+        .expect("OpenAI-compatible data array");
+    assert_eq!(data.len(), 3);
+    assert_eq!(
+        data[0].get("id").and_then(Value::as_str),
+        Some("gpt-5.3-codex")
+    );
+    assert_eq!(data[0].get("object").and_then(Value::as_str), Some("model"));
+    assert_eq!(
+        data[0].get("owned_by").and_then(Value::as_str),
+        Some("codexmanager")
+    );
+    assert_eq!(data[1].get("id").and_then(Value::as_str), Some("gpt-4o"));
+    assert_eq!(
+        data[2].get("id").and_then(Value::as_str),
+        Some("gpt-image-2")
+    );
     let models = value
         .get("models")
         .and_then(Value::as_array)
@@ -65,7 +85,7 @@ fn serialize_models_response_outputs_official_shape() {
         models[2].get("slug").and_then(Value::as_str),
         Some("gpt-image-2")
     );
-    assert_eq!(value.as_object().map(|object| object.len()), Some(1));
+    assert_eq!(value.as_object().map(|object| object.len()), Some(3));
     assert!(value.get("etag").is_none());
 }
 
@@ -89,9 +109,17 @@ fn serialize_models_response_preserves_description_for_codex_clients() {
         .get("models")
         .and_then(Value::as_array)
         .expect("models array");
+    let data = value
+        .get("data")
+        .and_then(Value::as_array)
+        .expect("OpenAI-compatible data array");
     assert_eq!(models.len(), 2);
     assert_eq!(
         models[0].get("description").and_then(Value::as_str),
+        Some("Latest frontier agentic coding model.")
+    );
+    assert_eq!(
+        data[0].get("description").and_then(Value::as_str),
         Some("Latest frontier agentic coding model.")
     );
 }
@@ -121,6 +149,44 @@ fn serialize_models_response_appends_codex_image_tool_model_once() {
         models[0].get("slug").and_then(Value::as_str),
         Some("gpt-image-2")
     );
+}
+
+#[test]
+fn serialize_models_response_filters_api_data_to_supported_models() {
+    let items = ModelsResponse {
+        models: vec![
+            ModelInfo {
+                slug: "gpt-supported".to_string(),
+                display_name: "GPT Supported".to_string(),
+                supported_in_api: true,
+                visibility: Some("list".to_string()),
+                ..Default::default()
+            },
+            ModelInfo {
+                slug: "gpt-hidden".to_string(),
+                display_name: "GPT Hidden".to_string(),
+                supported_in_api: false,
+                visibility: Some("hidden".to_string()),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    let output = serialize_models_response(&items);
+    let value: Value = serde_json::from_str(&output).expect("valid json");
+    let data = value
+        .get("data")
+        .and_then(Value::as_array)
+        .expect("OpenAI-compatible data array");
+    let ids = data
+        .iter()
+        .filter_map(|model| model.get("id").and_then(Value::as_str))
+        .collect::<Vec<_>>();
+
+    assert!(ids.contains(&"gpt-supported"));
+    assert!(ids.contains(&"gpt-image-2"));
+    assert!(!ids.contains(&"gpt-hidden"));
 }
 
 #[test]

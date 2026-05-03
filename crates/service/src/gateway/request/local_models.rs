@@ -2,16 +2,44 @@ use codexmanager_core::rpc::types::{ModelInfo, ModelsResponse};
 const MODEL_CACHE_SCOPE_DEFAULT: &str = "default";
 
 #[derive(serde::Serialize)]
-struct OfficialModelsResponse<'a> {
+struct CompatibleModelsResponse<'a> {
+    object: &'static str,
+    data: Vec<ApiModelInfo<'a>>,
     models: &'a [ModelInfo],
+}
+
+#[derive(serde::Serialize)]
+struct ApiModelInfo<'a> {
+    id: &'a str,
+    object: &'static str,
+    created: i64,
+    owned_by: &'static str,
+    display_name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<&'a str>,
 }
 
 fn serialize_models_response(models: &ModelsResponse) -> String {
     let models = crate::apikey_models::ensure_codex_image_tool_model_listed(models);
-    serde_json::to_string(&OfficialModelsResponse {
+    let data = models
+        .models
+        .iter()
+        .filter(|model| model.supported_in_api)
+        .map(|model| ApiModelInfo {
+            id: model.slug.as_str(),
+            object: "model",
+            created: 0,
+            owned_by: "codexmanager",
+            display_name: model.display_name.as_str(),
+            description: model.description.as_deref(),
+        })
+        .collect::<Vec<_>>();
+    serde_json::to_string(&CompatibleModelsResponse {
+        object: "list",
+        data,
         models: &models.models,
     })
-    .unwrap_or_else(|_| "{\"models\":[]}".to_string())
+    .unwrap_or_else(|_| "{\"object\":\"list\",\"data\":[],\"models\":[]}".to_string())
 }
 
 fn models_etag_header(models: &ModelsResponse) -> Result<Option<tiny_http::Header>, String> {
