@@ -248,9 +248,9 @@ mod tests {
     use codexmanager_core::storage::AggregateApi;
 
     use super::{
-        action_path_or_default, normalize_action_override, normalize_provider_type,
-        normalize_provider_type_value, provider_default_url, AGGREGATE_API_PROVIDER_CLAUDE,
-        AGGREGATE_API_PROVIDER_GEMINI,
+        action_path_or_default, build_codex_models_probe_url, normalize_action_override,
+        normalize_provider_type, normalize_provider_type_value, provider_default_url,
+        AGGREGATE_API_PROVIDER_CLAUDE, AGGREGATE_API_PROVIDER_GEMINI,
     };
 
     fn aggregate_api_with_action(action: Option<&str>) -> AggregateApi {
@@ -290,6 +290,34 @@ mod tests {
         let api = aggregate_api_with_action(Some(""));
         let path = action_path_or_default(&api, "/v1/messages?beta=true");
         assert_eq!(path, "/v1/messages?beta=true");
+    }
+
+    #[test]
+    fn codex_models_probe_url_does_not_append_client_version() {
+        let _guard = crate::test_env_guard();
+        crate::gateway::set_codex_user_agent_version("0.101.0")
+            .expect("set default codex user agent version");
+        let mut api = aggregate_api_with_action(None);
+        api.url = "https://api.openai.com/v1".to_string();
+
+        let url = build_codex_models_probe_url(&api);
+
+        assert_eq!(url, "https://api.openai.com/v1/models");
+        assert!(!url.contains("client_version"));
+    }
+
+    #[test]
+    fn codex_models_probe_url_preserves_custom_action_without_client_version() {
+        let _guard = crate::test_env_guard();
+        crate::gateway::set_codex_user_agent_version("0.101.0")
+            .expect("set default codex user agent version");
+        let mut api = aggregate_api_with_action(Some("/models?limit=20"));
+        api.url = "https://api.openai.com/v1".to_string();
+
+        let url = build_codex_models_probe_url(&api);
+
+        assert_eq!(url, "https://api.openai.com/v1/models?limit=20");
+        assert!(!url.contains("client_version"));
     }
 
     #[test]
@@ -612,28 +640,6 @@ fn build_gemini_probe_body() -> serde_json::Value {
     })
 }
 
-/// 函数 `append_client_version_query`
-///
-/// 作者: gaohongshun
-///
-/// 时间: 2026-04-02
-///
-/// # 参数
-/// - url: 参数 url
-///
-/// # 返回
-/// 返回函数执行结果
-fn append_client_version_query(url: &str) -> String {
-    if url.contains("client_version=") {
-        return url.to_string();
-    }
-    let separator = if url.contains('?') { '&' } else { '?' };
-    format!(
-        "{url}{separator}client_version={}",
-        gateway::current_codex_user_agent_version()
-    )
-}
-
 /// 函数 `probe_codex_only_for_provider`
 ///
 /// 作者: gaohongshun
@@ -674,6 +680,11 @@ fn add_codex_probe_headers(
         .header("accept-encoding", "identity"))
 }
 
+fn build_codex_models_probe_url(api: &AggregateApi) -> String {
+    let probe_path = action_path_or_default(api, "/models");
+    normalize_probe_url(api.url.as_str(), probe_path.as_str())
+}
+
 /// 函数 `probe_codex_models_endpoint`
 ///
 /// 作者: gaohongshun
@@ -692,9 +703,7 @@ fn probe_codex_models_endpoint(
     api: &AggregateApi,
     secret: &str,
 ) -> Result<i64, String> {
-    let probe_path = action_path_or_default(api, "/models");
-    let base_url = normalize_probe_url(api.url.as_str(), probe_path.as_str());
-    let url = append_client_version_query(base_url.as_str());
+    let url = build_codex_models_probe_url(api);
     let builder = client.get(url.as_str());
     let (builder, updated_url) = apply_probe_auth(builder, url.clone(), api, secret)?;
     let builder = if updated_url != url {
