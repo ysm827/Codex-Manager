@@ -1,6 +1,6 @@
 use super::{
     build_backend_base_url, build_local_backend_client, front_proxy_max_blocking_threads,
-    proxy_handler, ProxyState,
+    front_proxy_worker_threads, proxy_handler, ProxyState,
 };
 use axum::body::{to_bytes, Body};
 use axum::extract::State;
@@ -121,6 +121,22 @@ fn front_proxy_blocking_threads_allow_explicit_override() {
     let _front_guard = EnvGuard::set("CODEXMANAGER_FRONT_PROXY_MAX_BLOCKING_THREADS", "5");
 
     assert_eq!(front_proxy_max_blocking_threads(), 5);
+}
+
+#[test]
+fn front_proxy_worker_threads_default_to_small_runtime() {
+    let _guard = crate::test_env_guard();
+    let _worker_guard = EnvGuard::clear("CODEXMANAGER_FRONT_PROXY_WORKER_THREADS");
+
+    assert_eq!(front_proxy_worker_threads(), 2);
+}
+
+#[test]
+fn front_proxy_worker_threads_allow_explicit_override() {
+    let _guard = crate::test_env_guard();
+    let _worker_guard = EnvGuard::set("CODEXMANAGER_FRONT_PROXY_WORKER_THREADS", "3");
+
+    assert_eq!(front_proxy_worker_threads(), 3);
 }
 
 /// 函数 `request_without_content_length_over_limit_returns_413`

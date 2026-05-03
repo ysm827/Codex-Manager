@@ -1,10 +1,14 @@
 use codexmanager_core::auth::extract_token_exp;
 use codexmanager_core::storage::{now_ts, Storage, Token};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::auth_tokens::obtain_api_key;
 use crate::usage_http::refresh_access_token;
 
 pub(crate) const DEFAULT_TOKEN_REFRESH_AHEAD_SECS: i64 = 3600;
+
+static TOKEN_REFRESH_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
 
 /// 函数 `refresh_and_persist_access_token`
 ///
@@ -24,6 +28,26 @@ pub(crate) fn refresh_and_persist_access_token(
     client_id: &str,
     refresh_ahead_secs: i64,
 ) -> Result<(), String> {
+    let original_access_token = token.access_token.clone();
+    let original_refresh_token = token.refresh_token.clone();
+    let refresh_lock = token_refresh_lock_for_account(&token.account_id);
+    let _refresh_guard = refresh_lock
+        .lock()
+        .map_err(|_| "token refresh lock poisoned".to_string())?;
+
+    if let Some(latest) = storage
+        .find_token_by_account_id(&token.account_id)
+        .map_err(|err| err.to_string())?
+    {
+        if latest.access_token != original_access_token
+            || latest.refresh_token != original_refresh_token
+        {
+            *token = latest;
+            return Ok(());
+        }
+        *token = latest;
+    }
+
     let refreshed = refresh_access_token(issuer, client_id, &token.refresh_token)?;
     token.access_token = refreshed.access_token;
 
@@ -44,6 +68,17 @@ pub(crate) fn refresh_and_persist_access_token(
     let next_refresh_at = next_refresh_at_from_token(token, refresh_ahead_secs);
     let _ = storage.update_token_refresh_schedule(&token.account_id, access_exp, next_refresh_at);
     Ok(())
+}
+
+fn token_refresh_lock_for_account(account_id: &str) -> Arc<Mutex<()>> {
+    let locks = TOKEN_REFRESH_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut locks = locks
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    locks
+        .entry(account_id.to_string())
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone()
 }
 
 fn next_refresh_at_from_token(token: &Token, ahead_secs: i64) -> Option<i64> {

@@ -229,11 +229,14 @@ pub(super) fn try_handle(req: &JsonRpcRequest) -> Option<JsonRpcResponse> {
             }
         }
         "account/chatgptAuthTokens/refresh" => {
-            let previous_account_id =
-                first_str_param(req, &["previousAccountId", "previous_account_id"]);
+            let target_account_id = first_str_param(req, &["accountId", "account_id"])
+                .or_else(|| first_str_param(req, &["previousAccountId", "previous_account_id"]));
             super::value_or_error(auth_account::refresh_current_chatgpt_auth_tokens(
-                previous_account_id,
+                target_account_id,
             ))
+        }
+        "account/chatgptAuthTokens/refreshAll" => {
+            super::value_or_error(auth_account::refresh_all_chatgpt_auth_tokens())
         }
         "account/read" => {
             let refresh_token =

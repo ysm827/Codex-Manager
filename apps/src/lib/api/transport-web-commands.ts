@@ -287,6 +287,9 @@ export function createWebCommandMap(
     service_chatgpt_auth_tokens_refresh: {
       rpcMethod: "account/chatgptAuthTokens/refresh",
     },
+    service_chatgpt_auth_tokens_refresh_all: {
+      rpcMethod: "account/chatgptAuthTokens/refreshAll",
+    },
     service_apikey_list: { rpcMethod: "apikey/list" },
     service_apikey_create: { rpcMethod: "apikey/create" },
     service_apikey_usage_stats: { rpcMethod: "apikey/usageStats" },

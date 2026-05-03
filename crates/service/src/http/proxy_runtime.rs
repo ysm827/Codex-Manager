@@ -11,7 +11,9 @@ use crate::http::proxy_request::{build_target_url, filter_request_headers};
 use crate::http::proxy_response::{merge_upstream_headers, text_error_response};
 
 const DEFAULT_FRONT_PROXY_MAX_BLOCKING_THREADS: usize = 32;
+const DEFAULT_FRONT_PROXY_WORKER_THREADS: usize = 2;
 const ENV_FRONT_PROXY_MAX_BLOCKING_THREADS: &str = "CODEXMANAGER_FRONT_PROXY_MAX_BLOCKING_THREADS";
+const ENV_FRONT_PROXY_WORKER_THREADS: &str = "CODEXMANAGER_FRONT_PROXY_WORKER_THREADS";
 
 #[derive(Clone)]
 struct ProxyState {
@@ -86,6 +88,14 @@ fn front_proxy_max_blocking_threads() -> usize {
         ENV_FRONT_PROXY_MAX_BLOCKING_THREADS,
         crate::storage_helpers::storage_max_connections()
             .min(DEFAULT_FRONT_PROXY_MAX_BLOCKING_THREADS),
+    )
+    .max(1)
+}
+
+fn front_proxy_worker_threads() -> usize {
+    env_usize_or(
+        ENV_FRONT_PROXY_WORKER_THREADS,
+        DEFAULT_FRONT_PROXY_WORKER_THREADS,
     )
     .max(1)
 }
@@ -255,6 +265,7 @@ fn build_front_proxy_app(state: ProxyState) -> Router {
 /// 返回函数执行结果
 pub(crate) fn run_front_proxy(addr: &str, backend_addr: &str) -> io::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(front_proxy_worker_threads())
         .max_blocking_threads(front_proxy_max_blocking_threads())
         .enable_all()
         .build()

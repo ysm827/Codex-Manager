@@ -9,6 +9,7 @@ import {
   Download,
   FileUp,
   FolderOpen,
+  KeyRound,
   Loader2,
   MoreVertical,
   PencilLine,
@@ -130,6 +131,8 @@ export interface AccountsPageViewProps {
   sortDraft: string;
   isRefreshingAllAccounts: boolean;
   isRefreshingAccountId: string | null;
+  isRefreshingRtAccountId: string | null;
+  isRefreshingAllRtAccounts: boolean;
   isExporting: boolean;
   isWarmingUpAccounts: boolean;
   isDeletingMany: boolean;
@@ -175,7 +178,9 @@ export interface AccountsPageViewProps {
   handleConfirmAccountEditor: () => Promise<void>;
   handleConfirmDelete: () => void;
   refreshAllAccounts: () => void;
+  refreshAllAccountRt: () => void;
   refreshAccountList: () => void;
+  refreshAccountRt: (accountId: string) => void;
   importByFile: () => void;
   importByDirectory: () => void;
   deleteUnavailableFree: () => void;
@@ -223,6 +228,8 @@ export function AccountsPageView(props: AccountsPageViewProps) {
     sortDraft,
     isRefreshingAllAccounts,
     isRefreshingAccountId,
+    isRefreshingRtAccountId,
+    isRefreshingAllRtAccounts,
     isExporting,
     isWarmingUpAccounts,
     isDeletingMany,
@@ -265,7 +272,9 @@ export function AccountsPageView(props: AccountsPageViewProps) {
     handleConfirmAccountEditor,
     handleConfirmDelete,
     refreshAllAccounts,
+    refreshAllAccountRt,
     refreshAccountList,
+    refreshAccountRt,
     importByFile,
     importByDirectory,
     deleteUnavailableFree,
@@ -407,6 +416,20 @@ export function AccountsPageView(props: AccountsPageViewProps) {
                     />
                     {t("刷新账号用量")}
                     <DropdownMenuShortcut>ALL</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="h-9 rounded-lg px-2"
+                    disabled={!isServiceReady || isRefreshingAllRtAccounts}
+                    onClick={refreshAllAccountRt}
+                  >
+                    <KeyRound
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        isRefreshingAllRtAccounts && "animate-pulse",
+                      )}
+                    />
+                    {t("刷新全部 AT/RT")}
+                    <DropdownMenuShortcut>RT</DropdownMenuShortcut>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="h-9 rounded-lg px-2"
@@ -676,6 +699,10 @@ export function AccountsPageView(props: AccountsPageViewProps) {
                   const quotaItems = buildQuotaSummaryItems(account, t);
                   const statusAction = getAccountStatusAction(account, t);
                   const StatusActionIcon = statusAction.icon;
+                  const isRefreshingCurrentAccount =
+                    isRefreshingAccountId === account.id;
+                  const isRefreshingCurrentRt =
+                    isRefreshingRtAccountId === account.id;
                   const filteredIndex =
                     filteredAccountIndexMap.get(account.id) ?? -1;
                   const canMoveUp = filteredIndex > 0;
@@ -781,6 +808,7 @@ export function AccountsPageView(props: AccountsPageViewProps) {
                             disabled={!isServiceReady}
                             onClick={() => openUsage(account)}
                             title={t("用量详情")}
+                            aria-label={t("用量详情")}
                           >
                             <BarChart3 className="h-4 w-4" />
                           </Button>
@@ -793,11 +821,48 @@ export function AccountsPageView(props: AccountsPageViewProps) {
                                 render={<span />}
                                 nativeButton={false}
                                 disabled={!isServiceReady}
+                                title={t("更多账号操作")}
+                                aria-label={t("更多账号操作")}
                               >
                                 <MoreVertical className="h-4 w-4" />
+                                <span className="sr-only">
+                                  {t("更多账号操作")}
+                                </span>
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="gap-2"
+                                disabled={
+                                  !isServiceReady ||
+                                  isRefreshingAllAccounts ||
+                                  isRefreshingCurrentAccount
+                                }
+                                onClick={() => refreshAccount(account.id)}
+                              >
+                                <RefreshCw
+                                  className={cn(
+                                    "h-4 w-4",
+                                    isRefreshingCurrentAccount && "animate-spin",
+                                  )}
+                                />
+                                {t("刷新用量")}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2"
+                                disabled={!isServiceReady || isRefreshingCurrentRt}
+                                onClick={() => refreshAccountRt(account.id)}
+                              >
+                                <KeyRound
+                                  className={cn(
+                                    "h-4 w-4",
+                                    isRefreshingCurrentRt && "animate-pulse",
+                                  )}
+                                />
+                                {t("刷新 AT/RT")}
+                                <DropdownMenuShortcut>RT</DropdownMenuShortcut>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="gap-2"
                                 disabled={!isServiceReady || isUpdatingPreferred}
@@ -916,9 +981,13 @@ export function AccountsPageView(props: AccountsPageViewProps) {
         open={isPageActive && usageModalOpen}
         onOpenChange={handleUsageModalOpenChange}
         onRefresh={refreshAccount}
+        onRefreshRt={refreshAccountRt}
         isRefreshing={
           isRefreshingAllAccounts ||
           (!!selectedAccount && isRefreshingAccountId === selectedAccount.id)
+        }
+        isRefreshingRt={
+          !!selectedAccount && isRefreshingRtAccountId === selectedAccount.id
         }
       />
       <ConfirmDialog

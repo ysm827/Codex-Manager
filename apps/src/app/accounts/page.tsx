@@ -30,6 +30,8 @@ export default function AccountsPage() {
     isLoading,
     isServiceReady,
     refreshAccount,
+    refreshAccountRt,
+    refreshAllAccountRt,
     refreshAllAccounts,
     refreshAccountList,
     deleteAccount,
@@ -43,6 +45,8 @@ export default function AccountsPage() {
     isRefreshingAllAccounts,
     isExporting,
     isWarmingUpAccounts,
+    isRefreshingRtAccountId,
+    isRefreshingAllRtAccounts,
     isDeletingMany,
     setPreferredAccount,
     clearPreferredAccount,
@@ -494,6 +498,8 @@ export default function AccountsPage() {
       sortDraft={sortDraft}
       isRefreshingAllAccounts={isRefreshingAllAccounts}
       isRefreshingAccountId={isRefreshingAccountId}
+      isRefreshingRtAccountId={isRefreshingRtAccountId}
+      isRefreshingAllRtAccounts={isRefreshingAllRtAccounts}
       isExporting={isExporting}
       isWarmingUpAccounts={isWarmingUpAccounts}
       isDeletingMany={isDeletingMany}
@@ -536,7 +542,9 @@ export default function AccountsPage() {
       handleConfirmAccountEditor={handleConfirmAccountEditor}
       handleConfirmDelete={handleConfirmDelete}
       refreshAllAccounts={refreshAllAccounts}
+      refreshAllAccountRt={refreshAllAccountRt}
       refreshAccountList={refreshAccountList}
+      refreshAccountRt={refreshAccountRt}
       importByFile={importByFile}
       importByDirectory={importByDirectory}
       deleteUnavailableFree={deleteUnavailableFree}
