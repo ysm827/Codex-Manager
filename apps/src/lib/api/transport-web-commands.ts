@@ -234,6 +234,9 @@ export function createWebCommandMap(
     service_account_list: { rpcMethod: "account/list" },
     service_account_delete: { rpcMethod: "account/delete" },
     service_account_delete_many: { rpcMethod: "account/deleteMany" },
+    service_account_delete_by_statuses: {
+      rpcMethod: "account/deleteByStatuses",
+    },
     service_account_delete_unavailable_free: {
       rpcMethod: "account/deleteUnavailableFree",
     },

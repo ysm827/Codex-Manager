@@ -1220,6 +1220,136 @@ fn rpc_account_delete_unavailable_free_removes_refresh_invalid_free_accounts() {
     assert_eq!(remaining_ids, vec!["acc-pro-invalid"]);
 }
 
+/// 函数 `rpc_account_delete_by_statuses_deletes_only_selected_statuses`
+///
+/// 作者: gaohongshun
+///
+/// 时间: 2026-05-04
+///
+/// # 参数
+/// 无
+///
+/// # 返回
+/// 无
+#[test]
+fn rpc_account_delete_by_statuses_deletes_only_selected_statuses() {
+    let ctx = RpcTestContext::new("rpc-account-delete-by-statuses");
+    let storage = Storage::open(ctx.db_path()).expect("open db");
+    storage.init().expect("init schema");
+    let now = now_ts();
+
+    for (idx, (id, status)) in [
+        ("acc-active", "active"),
+        ("acc-unavailable", "unavailable"),
+        ("acc-banned", "banned"),
+        ("acc-limited", "limited"),
+        ("acc-disabled", "disabled"),
+        ("acc-inactive", "inactive"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        storage
+            .insert_account(&Account {
+                id: id.to_string(),
+                label: id.to_string(),
+                issuer: "https://auth.openai.com".to_string(),
+                chatgpt_account_id: None,
+                workspace_id: None,
+                group_name: None,
+                sort: idx as i64,
+                status: status.to_string(),
+                created_at: now,
+                updated_at: now,
+            })
+            .expect("insert account");
+    }
+
+    let server = codexmanager_service::start_one_shot_server().expect("start server");
+    let req = JsonRpcRequest {
+        id: 78.into(),
+        method: "account/deleteByStatuses".to_string(),
+        params: Some(serde_json::json!({
+            "statuses": ["banned", "limited", "inactive"]
+        })),
+        trace: None,
+    };
+    let json = serde_json::to_string(&req).expect("serialize delete");
+    let v = post_rpc(&server.addr, &json);
+    let result = v.get("result").expect("result");
+
+    assert_eq!(
+        result.get("deleted").and_then(|value| value.as_u64()),
+        Some(3)
+    );
+    let target_statuses = result
+        .get("targetStatuses")
+        .and_then(|value| value.as_array())
+        .expect("target statuses");
+    assert_eq!(
+        target_statuses
+            .iter()
+            .filter_map(|value| value.as_str())
+            .collect::<Vec<_>>(),
+        vec!["banned", "limited", "inactive"]
+    );
+    let deleted_ids = result
+        .get("deletedAccountIds")
+        .and_then(|value| value.as_array())
+        .expect("deleted ids");
+    assert_eq!(
+        deleted_ids
+            .iter()
+            .filter_map(|value| value.as_str())
+            .collect::<Vec<_>>(),
+        vec!["acc-banned", "acc-limited", "acc-inactive"]
+    );
+
+    let remaining = storage.list_accounts().expect("list accounts");
+    let remaining_ids = remaining
+        .into_iter()
+        .map(|item| item.id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        remaining_ids,
+        vec!["acc-active", "acc-unavailable", "acc-disabled"]
+    );
+}
+
+/// 函数 `rpc_account_delete_by_statuses_rejects_unknown_status`
+///
+/// 作者: gaohongshun
+///
+/// 时间: 2026-05-04
+///
+/// # 参数
+/// 无
+///
+/// # 返回
+/// 无
+#[test]
+fn rpc_account_delete_by_statuses_rejects_unknown_status() {
+    let _ctx = RpcTestContext::new("rpc-account-delete-by-statuses-unknown");
+    let server = codexmanager_service::start_one_shot_server().expect("start server");
+    let req = JsonRpcRequest {
+        id: 79.into(),
+        method: "account/deleteByStatuses".to_string(),
+        params: Some(serde_json::json!({
+            "statuses": ["unknown"]
+        })),
+        trace: None,
+    };
+    let json = serde_json::to_string(&req).expect("serialize delete");
+    let v = post_rpc(&server.addr, &json);
+    let result = v.get("result").expect("result");
+    let message = result
+        .get("error")
+        .and_then(|value| value.as_str())
+        .expect("error message");
+
+    assert!(message.contains("unsupported cleanup statuses"));
+}
+
 /// 函数 `rpc_account_update_status_toggles_manual_enable_disable`
 ///
 /// 作者: gaohongshun

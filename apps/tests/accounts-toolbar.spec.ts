@@ -211,4 +211,33 @@ test("accounts toolbar shows warmup button and tooltip", async ({ page }) => {
   await page.getByText("账号操作", { exact: true }).click();
   await page.getByRole("menuitem", { name: /刷新全部 AT\/RT/ }).click();
   await expect.poll(() => refreshAllRtCount).toBe(1);
+
+  await page.locator("tbody tr").first().getByRole("checkbox").check();
+  await page.getByText("账号操作", { exact: true }).click();
+
+  const deleteSelectedItem = page.getByRole("menuitem", {
+    name: /删除选中账号/,
+  });
+  const cleanupByStatusItem = page.getByRole("menuitem", {
+    name: /按状态清理账号/,
+  });
+
+  await expect(deleteSelectedItem).toBeEnabled();
+  await deleteSelectedItem.hover();
+  await expect
+    .poll(async () =>
+      deleteSelectedItem.evaluate((element) =>
+        element.hasAttribute("data-highlighted"),
+      ),
+    )
+    .toBe(true);
+
+  await cleanupByStatusItem.hover();
+  await expect
+    .poll(async () =>
+      cleanupByStatusItem.evaluate((element) =>
+        element.hasAttribute("data-highlighted"),
+      ),
+    )
+    .toBe(true);
 });

@@ -24,13 +24,14 @@ import {
 } from "./account-auth";
 import {
   AccountExportResult,
-  AccountImportError,
   AccountImportResult,
   AccountWarmupResult,
+  DeleteAccountsByStatusesResult,
   DeleteUnavailableFreeResult,
   readAccountExportResult,
   readAccountImportResult,
   readAccountWarmupResult,
+  readDeleteAccountsByStatusesResult,
   readApiKeySecret,
   readDeleteUnavailableFreeResult,
 } from "./account-maintenance";
@@ -66,6 +67,10 @@ export interface AccountExportPayload {
 export interface AccountWarmupPayload {
   accountIds?: string[];
   message?: string;
+}
+
+export interface AccountDeleteByStatusesPayload {
+  statuses: string[];
 }
 
 interface LoginStartPayload {
@@ -296,6 +301,17 @@ export const accountClient = {
   deleteUnavailableFree: async (): Promise<DeleteUnavailableFreeResult> =>
     readDeleteUnavailableFreeResult(
       await invoke<unknown>("service_account_delete_unavailable_free", withAddr())
+    ),
+  deleteByStatuses: async (
+    params: AccountDeleteByStatusesPayload
+  ): Promise<DeleteAccountsByStatusesResult> =>
+    readDeleteAccountsByStatusesResult(
+      await invoke<unknown>(
+        "service_account_delete_by_statuses",
+        withAddr({
+          statuses: Array.isArray(params?.statuses) ? params.statuses : [],
+        })
+      )
     ),
   updateSort: (accountId: string, sort: number) =>
     invoke("service_account_update", withAddr({ accountId, sort })),

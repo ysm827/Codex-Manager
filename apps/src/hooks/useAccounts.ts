@@ -27,7 +27,9 @@ type WarmupResult = Awaited<ReturnType<typeof accountClient.warmup>>;
 type RefreshAllRtResult = Awaited<
   ReturnType<typeof accountClient.refreshAllChatgptAuthTokens>
 >;
-type DeleteUnavailableFreeResult = { deleted?: number };
+type DeleteAccountsByStatusesResult = Awaited<
+  ReturnType<typeof accountClient.deleteByStatuses>
+>;
 type AccountSortUpdate = { accountId: string; sort: number };
 
 /**
@@ -380,15 +382,15 @@ export function useAccounts() {
     },
   });
 
-  const deleteUnavailableFreeMutation = useMutation({
-    mutationFn: () => accountClient.deleteUnavailableFree(),
-    onSuccess: async (result: DeleteUnavailableFreeResult) => {
+  const deleteByStatusesMutation = useMutation({
+    mutationFn: (statuses: string[]) => accountClient.deleteByStatuses({ statuses }),
+    onSuccess: async (result: DeleteAccountsByStatusesResult) => {
       await invalidateAll();
       const deleted = Number(result?.deleted || 0);
       if (deleted > 0) {
-        toast.success(t("已移除 {count} 个不可用免费账号", { count: deleted }));
+        toast.success(t("已清理 {count} 个账号", { count: deleted }));
       } else {
-        toast.success(t("未发现可清理的不可用免费账号"));
+        toast.success(t("未发现可清理的账号"));
       }
     },
     onError: (error: unknown) => {
@@ -669,9 +671,9 @@ export function useAccounts() {
       if (!ensureServiceReady("批量删除账号")) return;
       deleteManyMutation.mutate(accountIds);
     },
-    deleteUnavailableFree: () => {
+    cleanupAccountsByStatuses: async (statuses: string[]) => {
       if (!ensureServiceReady("清理账号")) return;
-      deleteUnavailableFreeMutation.mutate();
+      await deleteByStatusesMutation.mutateAsync(statuses);
     },
     importByFile: () => {
       if (!ensureServiceReady("导入账号")) return;
@@ -740,6 +742,7 @@ export function useAccounts() {
     isExporting: exportMutation.isPending,
     isWarmingUpAccounts: warmupMutation.isPending,
     isDeletingMany: deleteManyMutation.isPending,
+    isCleaningAccountsByStatus: deleteByStatusesMutation.isPending,
     isUpdatingPreferred:
       setPreferredMutation.isPending || clearPreferredMutation.isPending,
     isUpdatingSortAccountId:

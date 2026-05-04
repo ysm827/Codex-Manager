@@ -12,6 +12,7 @@ macro_rules! invoke_handler {
             crate::commands::account::remote::service_account_list,
             crate::commands::account::remote::service_account_delete,
             crate::commands::account::remote::service_account_delete_many,
+            crate::commands::account::remote::service_account_delete_by_statuses,
             crate::commands::account::remote::service_account_delete_unavailable_free,
             crate::commands::account::remote::service_account_update,
             crate::commands::account::remote::service_account_warmup,

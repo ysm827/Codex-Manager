@@ -59,6 +59,22 @@ pub(super) fn try_handle(req: &JsonRpcRequest) -> Option<JsonRpcResponse> {
         "account/deleteUnavailableFree" => {
             super::value_or_error(account_cleanup::delete_unavailable_free_accounts())
         }
+        "account/deleteByStatuses" => {
+            let statuses = req
+                .params
+                .as_ref()
+                .and_then(|params| params.get("statuses"))
+                .and_then(|value| value.as_array())
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|item| item.as_str())
+                        .map(|item| item.to_string())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            super::value_or_error(account_cleanup::delete_accounts_by_statuses(statuses))
+        }
         "account/update" => {
             let account_id = super::str_param(req, "accountId").unwrap_or("");
             let sort = super::i64_param(req, "sort");
